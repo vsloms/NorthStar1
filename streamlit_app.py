@@ -199,6 +199,74 @@ EXAMPLES = {
         "A: POD3 progressing; bowel function returning; watch creatinine.\n"
         "P: Advance to soft solids; discontinue IV fluids; continue acetaminophen; stop morphine; PT BID; BMP tomorrow; enoxaparin; discharge home with home health nursing and PT.\n"
     ),
+
+    # NEW: very long + messy pair
+    "LONG & MESSY: Med-surg progress notes w/ labs, orders, cultures": (
+        # Yesterday
+        "Progress Note – Hospital Day 4\n"
+        "Chief: fevers, postop ileus improving. Reports poor sleep.\n"
+        "Meds: ceftriaxone 2g q24h, metronidazole 500mg q8h, enoxaparin 40mg daily, "
+        "acetaminophen 650mg q6h PRN, oxycodone 5mg q4h PRN, lisinopril 10mg daily.\n"
+        "Fluids/lines: PIV L forearm; LR @ 75 mL/hr; Foley in place since HD3.\n"
+        "Labs (05:20): WBC 13.2 (↑), Hgb 10.1, Plt 320, Na 136, K 3.7, Cr 1.0, Glu 148.\n"
+        "Micro: blood cx x2 drawn HD3 — NGTD. UA neg. Sputum not obtained.\n"
+        "Imaging: CXR (HD3) mild atelectasis, no consolidation. KUB: improving bowel gas pattern.\n"
+        "Consults: PT evaluated — min assist to stand; ambulated 10 ft with walker; rec: OOB TID, gait 2x/day.\n"
+        "Nursing: two BMs in last 24h; I/Os incomplete; Tmax 38.2 overnight.\n"
+        "Assessment: postop fever vs resolving ileus; likely atelectasis component. AKI resolved. "
+        "Hypertension controlled. DVT ppx ongoing.\n"
+        "Plan: continue CTX/flagyl pending cultures; IS 10x/hr while awake; wean O2 as tolerated; "
+        "advance to soft diet if no N/V; PT daily; maintain Foley today, reassess tomorrow; "
+        "BMP/CBC in AM; sleep hygiene (reduce overnight interruptions if stable).\n",
+
+        # Today
+        "Progress Note – Hospital Day 5\n"
+        "Subjective: slept better after melatonin; hungry; minimal pain at rest.\n"
+        "Meds: ceftriaxone STOPPED; switched to piperacillin–tazobactam 3.375g q8h; "
+        "metronidazole STOPPED; enoxaparin 40mg daily; acetaminophen scheduled 650mg q6h; "
+        "oxycodone PRN; lisinopril HELD for mild hypotension overnight; STARTED pantoprazole 40mg daily.\n"
+        "Fluids/lines: LR DISCONTINUED; PIV remains; Foley REMOVED 09:00 – voided 300 mL post-removal.\n"
+        "Labs (05:15): WBC 9.8 (improved), Hgb 9.7, Plt 345, Na 138, K 3.4 (↓), Cr 1.2 (slightly ↑), Glu 132.\n"
+        "Micro: blood cx set #1 POS for E. coli (HD3, time to positivity 18h), set #2 NGTD; repeat cultures drawn this AM.\n"
+        "Imaging: CT A/P with contrast (HD4 evening): small postoperative fluid collection near right gutter "
+        "(2.5 cm) without rim enhancement, likely sterile; no free air.\n"
+        "Consults: PT progress — ambulated 60 ft with walker, CGA; rec home PT at discharge if progress continues.\n"
+        "Nursing: two BMs; I/Os complete; Tmax 37.6; walked hall twice with assist; tolerated soft diet.\n"
+        "Assessment: bacteremia likely GI source, clinically improving after abx broadened; "
+        "mild hypokalemia; borderline creatinine rise likely from dehydration; pain controlled; "
+        "functional status improving.\n"
+        "Plan: continue Zosyn pending sensitivities; replete KCl 40 mEq PO x1 then recheck; "
+        "encourage PO intake; PT bid; remove fall-risk bracelet when stable; "
+        "case management: anticipate discharge home in 48–72h with home PT; "
+        "daily CBC/BMP; resume lisinopril tomorrow if BP stable.\n"
+    ),
+
+    # NEW: single messy note (use with Single note mode)
+    "SINGLE NOTE: Messy hospitalist note with labs + consults": (
+        "Hospitalist Progress Note – HD7\n"
+        "Interval events: no acute overnight; mild orthostasis this AM after shower.\n"
+        "Meds: insulin glargine 18u QHS; insulin lispro sliding scale with meals; "
+        "metoprolol tartrate 25mg BID; apixaban 5mg BID; atorvastatin 40mg QHS; "
+        "cefazolin STOPPED yesterday; vancomycin STARTED per ID for MRSA nares (+), trough pending.\n"
+        "Diet: consistent carb; 1500 mL fluid restriction. DVT ppx: therapeutic on apixaban.\n"
+        "Vitals: afebrile; BP 108/68 (overnight lows to 96/60); HR 84; sat 95% RA.\n"
+        "I/O last 24h: PO 1100 mL; UOP 900 mL; 1 BM. Weight 82.1 kg (↑0.6 kg).\n"
+        "Labs 06:10: WBC 11.4 (↑), Hgb 11.2, Plt 410, Na 137, K 3.9, BUN 22, Cr 1.0, Glu 172 (↑), "
+        "AST/ALT wnl; A1c 8.1% (prior). Lactate 1.7.\n"
+        "Micro: wound culture from LLE ulcer grew MSSA + strep; blood cx NGTD x48h.\n"
+        "Imaging: Duplex LE yesterday—no DVT. Echo (HD6) EF 55%, no vegetations.\n"
+        "Consults: ID recommends switch to oral doxycycline on discharge x7d; "
+        "PT: ambulated 100 ft with cane, CGA; recommend stair training prior to DC; "
+        "CM: home health nursing + PT arranged, pending teaching.\n"
+        "Assessment: diabetic foot ulcer with cellulitis improving; hyperglycemia suboptimal; "
+        "MRSA colonization; orthostatic symptoms likely from diuresis; functional status improving.\n"
+        "Plan: continue vancomycin today, convert to doxycycline 100mg BID tomorrow if stable; "
+        "increase glargine to 20u QHS; adjust lispro scale to moderate; "
+        "hold metoprolol if SBP < 100 or HR < 60; orthostatic vitals today; "
+        "PT stair training; nursing to reinforce wound care dressing change technique; "
+        "target discharge tomorrow with HH nursing/PT and wound clinic follow-up in 1 week.\n",
+        ""  # second element unused in single-note mode
+    ),
 }
 
 # -------------------- Mode + Inputs --------------------
