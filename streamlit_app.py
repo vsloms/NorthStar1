@@ -283,13 +283,20 @@ if mode == "Compare two notes":
     note_a = colA.text_area("Yesterday's note", value=default_a, height=260, placeholder="Paste Note A…")
     note_b = colB.text_area("Today's note", value=default_b, height=260, placeholder="Paste Note B…")
 else:
-    # Single note mode uses only "Today's note"
+    # --- Single note mode uses only one note ---
     default_b = ""
     if choice != example_names[0]:
-        # load just the "today" half from any example
-        _, default_b = EXAMPLES[choice]
+        pair = EXAMPLES[choice]
+        # Use the second element if it's a non-empty string; otherwise fall back to the first
+        if isinstance(pair, (list, tuple)) and len(pair) >= 1:
+            if len(pair) > 1 and isinstance(pair[1], str) and pair[1].strip():
+                default_b = pair[1].strip()
+            else:
+                default_b = pair[0]
+
     note_a = ""  # unused
-    note_b = st.text_area("Note", value=default_b, height=260, placeholder="Paste a single note…")
+    note_b = st.text_area("Note", value=default_b, height=420, placeholder="Paste a single note…")
+
 
 # -------------------- Search / Highlight --------------------
 with st.expander("Search within notes (highlights matches)"):
