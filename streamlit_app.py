@@ -280,8 +280,8 @@ if mode == "Compare two notes":
     default_a, default_b = ("", "")
     if choice != example_names[0]:
         default_a, default_b = EXAMPLES[choice]
-    note_a = colA.text_area("Yesterday's note", value=default_a, height=260, placeholder="Paste Note A…")
-    note_b = colB.text_area("Today's note", value=default_b, height=260, placeholder="Paste Note B…")
+    note_a = colA.text_area("Yesterday's note", value=default_a, height=420, placeholder="Paste Note A…")
+    note_b = colB.text_area("Today's note", value=default_b, height=420, placeholder="Paste Note B…")
 else:
     # --- Single note mode uses only one note ---
     default_b = ""
