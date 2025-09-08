@@ -201,17 +201,27 @@ EXAMPLES = {
     ),
 }
 
-# -------------------- UI: Examples + Inputs --------------------
+# -------------------- Mode + Inputs --------------------
+mode = st.radio("Mode", ["Compare two notes", "Single note"], horizontal=True)
+
 example_names = ["-- Select example notes --"] + list(EXAMPLES.keys())
 choice = st.selectbox("Load example notes (optional)", example_names, index=0)
 
-colA, colB = st.columns(2)
-default_a, default_b = ("", "")
-if choice != example_names[0]:
-    default_a, default_b = EXAMPLES[choice]
-
-note_a = colA.text_area("Yesterday's note", value=default_a, height=260, placeholder="Paste Note A…")
-note_b = colB.text_area("Today's note", value=default_b, height=260, placeholder="Paste Note B…")
+if mode == "Compare two notes":
+    colA, colB = st.columns(2)
+    default_a, default_b = ("", "")
+    if choice != example_names[0]:
+        default_a, default_b = EXAMPLES[choice]
+    note_a = colA.text_area("Yesterday's note", value=default_a, height=260, placeholder="Paste Note A…")
+    note_b = colB.text_area("Today's note", value=default_b, height=260, placeholder="Paste Note B…")
+else:
+    # Single note mode uses only "Today's note"
+    default_b = ""
+    if choice != example_names[0]:
+        # load just the "today" half from any example
+        _, default_b = EXAMPLES[choice]
+    note_a = ""  # unused
+    note_b = st.text_area("Note", value=default_b, height=260, placeholder="Paste a single note…")
 
 # -------------------- Search / Highlight --------------------
 with st.expander("Search within notes (highlights matches)"):
@@ -220,16 +230,20 @@ with st.expander("Search within notes (highlights matches)"):
 
     search_query = st.text_input("Search term(s) (case-insensitive; multiple words allowed)")
     if search_query.strip():
-        hits_a = count_hits(note_a, search_query)
-        hits_b = count_hits(note_b, search_query)
-        st.caption(f"Matches — Yesterday: {hits_a} | Today: {hits_b}")
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("Yesterday (highlighted):")
-            st.markdown(highlight_text(note_a, search_query), unsafe_allow_html=True)
-        with c2:
-            st.markdown("Today (highlighted):")
+        if mode == "Compare two notes":
+            hits_a = count_hits(note_a, search_query)
+            hits_b = count_hits(note_b, search_query)
+            st.caption(f"Matches — Yesterday: {hits_a} | Today: {hits_b}")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("Yesterday (highlighted):")
+                st.markdown(highlight_text(note_a, search_query), unsafe_allow_html=True)
+            with c2:
+                st.markdown("Today (highlighted):")
+                st.markdown(highlight_text(note_b, search_query), unsafe_allow_html=True)
+        else:
+            hits_b = count_hits(note_b, search_query)
+            st.caption(f"Matches — Note: {hits_b}")
             st.markdown(highlight_text(note_b, search_query), unsafe_allow_html=True)
 
 # -------------------- Category filters --------------------
@@ -259,7 +273,7 @@ def role_hint(r: str) -> str:
     return ("Emphasize assessment/plan differences, medication changes (added, discontinued, dose/frequency), "
             "consults, and diagnostic updates. Return 8 concise bullets.")
 
-# -------------------- LLM call (structured headings) --------------------
+# -------------------- LLM calls --------------------
 def compare_notes_structured(note_a: str, note_b: str, role: str) -> str:
     system_msg = (
         "You are a clinical documentation assistant. Compare two clinical notes and report only real differences. "
@@ -276,6 +290,35 @@ def compare_notes_structured(note_a: str, note_b: str, role: str) -> str:
         f"Role instruction: {role_hint(role)}\n\n"
         f"Note_A (yesterday):\n{note_a}\n\n"
         f"Note_B (today):\n{note_b}\n"
+    )
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        temperature=0.2,
+        max_tokens=900,
+    )
+    return resp.choices[0].message.content.strip()
+
+def analyze_single_note_structured(note: str, role: str) -> str:
+    system_msg = (
+        "You are a clinical documentation assistant. Analyze ONE clinical note and extract actionable details. "
+        "Return STRUCTURED MARKDOWN with EXACT headings (these exact strings):\n"
+        "## Medications\n"
+        "## Orders & Plan\n"
+        "## PT/OT\n"
+        "## Case Management / Disposition\n"
+        "## Role Brief\n"
+        "Under each heading, use concise bullet points. Avoid boilerplate. "
+        "If a section is not mentioned, write 'No changes noted.' "
+        "For Role Brief, summarize what matters for the specified role in 4–6 bullets."
+    )
+    user_msg = (
+        f"ROLE: {role}\n"
+        f"Role instruction: {role_hint(role)}\n\n"
+        f"Note:\n{note}\n"
     )
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -334,15 +377,21 @@ def brief_to_pdf_bytes(markdown_text: str, title: str = "Clinical Change Tracker
     return buffer.getvalue()
 
 # -------------------- Action --------------------
-run_btn = st.button("Compare Notes", type="primary")
+run_btn = st.button("Run", type="primary")
 
 if run_btn:
-    if not (note_a and note_b):
-        st.warning("Paste text into both boxes first or load an example.")
-        st.stop()
-
-    with st.spinner("Comparing..."):
-        output_md = compare_notes_structured(note_a, note_b, role)
+    if mode == "Compare two notes":
+        if not (note_a and note_b):
+            st.warning("Paste text into both boxes first or load an example.")
+            st.stop()
+        with st.spinner("Comparing..."):
+            output_md = compare_notes_structured(note_a, note_b, role)
+    else:
+        if not note_b:
+            st.warning("Paste a note first or load an example.")
+            st.stop()
+        with st.spinner("Analyzing note..."):
+            output_md = analyze_single_note_structured(note_b, role)
 
     # Split and reassemble only selected sections (plain markdown headings)
     sections = split_sections(output_md)
@@ -354,7 +403,7 @@ if run_btn:
     if f_brief and sections.get("brief"): collected.append("## Role Brief\n" + sections["brief"])
     final_text = "\n\n".join(collected).strip() or output_md
 
-    st.subheader("Differences and Role Brief")
+    st.subheader("Summary")
     st.markdown(final_text)
 
     # Actions row (Copy | Print | PDF)
@@ -364,7 +413,7 @@ if run_btn:
     with c_print:
         render_print_button(final_text, "Print summary")
     with c_pdf:
-        pdf_bytes = brief_to_pdf_bytes(final_text, title=f"Change Summary — {role} view")
+        pdf_bytes = brief_to_pdf_bytes(final_text, title=f"{'Compare' if mode=='Compare two notes' else 'Single'} — {role} view")
         st.download_button(
             label="Download summary as PDF",
             data=pdf_bytes,
