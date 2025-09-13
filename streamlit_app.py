@@ -165,12 +165,117 @@ def split_sections(markdown_text: str):
         sections[current_key] = "\n".join(buf).strip()
     return sections
 
-# -------------------- Example notes (keep short here) --------------------
+# -------------------- Example notes --------------------
 EXAMPLES = {
+    # Simple sanity check
     "Simple Med Change": (
-        "Patient on lisinopril 10mg daily.\nPT: ambulated 20 ft with walker.\nPlan: continue meds.\n",
-        "Patient switched to lisinopril 20mg daily.\nPT: ambulated 40 ft with walker.\nPlan: add BMP.\n"
-    )
+        "Pt on lisinopril 10mg daily. PT: amb 20 ft w/ walker, min assist. Plan: continue meds.",
+        "Lisinopril ↑ to 20mg daily. PT: amb 40 ft CGA. Plan: add BMP tomorrow."
+    ),
+
+    # ========= REALISTIC COMPARE PAIRS =========
+    "REALISTIC PAIR: Post-op GI (HD4→HD5)": (
+        # YESTERDAY
+        "Progress Note – HD4 s/p sigmoid colectomy. Pain 4/10; clear liquids tolerated. "
+        "Meds: acetaminophen 650 mg q6h, oxycodone 5 mg q4h PRN, enoxaparin 40 mg daily, "
+        "lisinopril 10 mg daily. Foley in place (since HD3). IV LR @ 75 mL/hr. "
+        "Labs 05:30 – WBC 12.8 (↑), Hgb 10.4, Plt 315, Na 136, K 3.7, Cr 0.9, Glu 148. "
+        "CXR: mild basilar atelectasis. PT: sit-to-stand min assist; amb 15 ft w/ RW; dizziness. "
+        "I/Os incomplete; BM x0; flatus present. Assessment: post-op ileus improving; "
+        "atelectasis contributing to low-grade fevers. Plan: IS q1h while awake; advance to full liquids; "
+        "maintain Foley today; PT daily; daily CBC/BMP; consider dc IVFs if PO ↑.",
+        # TODAY
+        "Progress Note – HD5. Slept better w/ melatonin; asking for solids. "
+        "Meds: acetaminophen scheduled; oxycodone PRN; enoxaparin 40 mg daily; "
+        "lisinopril HELD overnight for SBP 98; START pantoprazole 40 mg daily. "
+        "Foley REMOVED 09:00; voided 350 mL within 6h. IV LR DISCONTINUED. "
+        "Labs 05:20 – WBC 9.6 (improved), Hgb 9.9, Plt 340, Na 138, K 3.4 (↓), Cr 1.1 (sl ↑), Glu 132. "
+        "CT A/P (HD4 evening): small 2.5 cm postop fluid, no rim enhancement; no free air. "
+        "PT: amb 60 ft CGA; rec: home PT if progress continues. "
+        "BM x1; tolerating soft diet. Assessment: clinically improving; mild hypokalemia; "
+        "creatinine up slightly (likely dehydration). Plan: KCl 40 mEq PO x1 then recheck; "
+        "encourage PO; PT BID; resume lisinopril tomorrow if SBP stable; anticipate discharge 48–72h."
+    ),
+
+    "REALISTIC PAIR: Possible Sepsis → Narrowing Abx": (
+        # YESTERDAY
+        "Hospital Day 2. Tmax 38.6 overnight; tachy 104. "
+        "Started empiric piperacillin-tazobactam 3.375 g q8h + vancomycin per pharmacy dosing. "
+        "Blood cultures x2 drawn prior to antibiotics. Lactate 2.4 → 1.6 after fluids. "
+        "UA w/ nitrites and LE; urine culture sent. "
+        "Labs: WBC 15.2, Cr 1.2 (baseline 0.9). 2L LR in ED; now 100 mL/hr. "
+        "Assessment: severe UTI vs pyelo; rule out bacteremia. "
+        "Plan: continue broad abx; follow cultures; trend CBC/BMP; strict I/Os.",
+        # TODAY
+        "Hospital Day 3. Afebrile 24h; HR 86. "
+        "Blood culture set #1 grew E. coli (pan-sensitive); set #2 NGTD. "
+        "Urine culture >100k CFU E. coli (susceptible to ceftriaxone, nitrofurantoin). "
+        "Abx NARROWED: STOP vanc/Zosyn; START ceftriaxone 2 g q24h. "
+        "Cr improved to 1.0; WBC 10.8. IVF DISCONTINUED; PO intake adequate. "
+        "Assessment: improving urosepsis; narrowed therapy. "
+        "Plan: ceftriaxone total 5–7 days; encourage ambulation; remove IV if tolerating PO tomorrow; "
+        "anticipate discharge in 24–48h w/ oral step-down per sensitivities."
+    ),
+
+    "REALISTIC PAIR: CHF Exacerbation (trend + orders)": (
+        # YESTERDAY
+        "Admit for dyspnea/edema. Dx: acute on chronic HFrEF (EF 30%). "
+        "Weight 92.4 kg; +2 LE edema. O2 2 L NC sat 94%. "
+        "Meds: IV furosemide 40 mg BID, lisinopril 10 mg daily, metoprolol succinate 50 mg daily, "
+        "spironolactone 25 mg daily. Strict I/Os; 1.5 L fluid restriction; low-sodium diet. "
+        "Net −800 mL last 24h. BMP AM. PT deferred due to SOB at rest.",
+        # TODAY
+        "Reports less orthopnea; slept on 2 pillows (was 4). "
+        "Weight 90.9 kg (−1.5 kg). Net −1.9 L past 24h. O2 1 L NC sat 95%; may trial RA. "
+        "Meds: continue IV furosemide 40 mg BID; ADD dapagliflozin 10 mg daily; "
+        "continue ACE/BB/MRA. K 3.5 → give KCl 20 mEq PO once. "
+        "PT evaluated: ambulated 50 ft with rests; plan daily gait training. "
+        "Plan: transition to oral diuretics tomorrow if stable; CM to review CHF education; "
+        "anticipate discharge 24–48h with home health nursing."
+    ),
+
+    # ========= REALISTIC SINGLE NOTES (second element intentionally empty) =========
+    "SINGLE NOTE: Long hospitalist note (HD7 – wound/DM)": (
+        "Hospitalist Note – HD7. No acute overnight. Mild orthostasis after shower. "
+        "Meds: insulin glargine 18 u QHS; lispro sliding scale with meals; metoprolol tartrate 25 mg BID; "
+        "apixaban 5 mg BID; atorvastatin 40 mg QHS; vancomycin STARTED per ID for MRSA nares (+). "
+        "Diet: consistent carb; 1500 mL fluid restriction. Vitals: afebrile, BP 108/68, HR 84, RA 95%. "
+        "I/O 24h: PO 1100 mL; UOP 900 mL; BM x1. Wt 82.1 kg (+0.6). "
+        "Labs: WBC 11.4, Hgb 11.2, Plt 410, Na 137, K 3.9, BUN 22, Cr 1.0, Glu 172. "
+        "Cultures: wound MSSA + strep; blood NGTD. Imaging: LE duplex neg DVT; Echo EF 55%. "
+        "Consults: ID → convert to doxycycline on discharge x7d; PT: amb 100 ft CGA; "
+        "CM: home health nursing + PT arranged. Assessment: diabetic foot ulcer improving; "
+        "hyperglycemia suboptimal; MRSA colonization; functional status improving. "
+        "Plan: continue vanc today → convert to doxy 100 mg BID tomorrow if stable; "
+        "increase glargine to 20 u; adjust lispro to moderate scale; "
+        "hold metoprolol if SBP <100 or HR <60; orthostatic vitals today; "
+        "PT stair training; nursing reinforce wound care; target discharge tomorrow with HH.",
+        ""
+    ),
+
+    "SINGLE NOTE: Post-op day 3 surgical note (messy)": (
+        "Surg Progress POD3. Feels better; tolerating soft diet; ambulated twice. "
+        "Incisions CDI; JP drain 75 mL serosanguinous/24h. Foley removed; voiding. "
+        "Meds: acetaminophen ATC, oxycodone PRN (used x2 last 24h), enoxaparin 40 mg daily, "
+        "ondansetron PRN. IVFs at 50 mL/hr; plan to stop if PO adequate. "
+        "Labs: WBC 10.1 (down), Hgb 10.8, Na 138, K 3.6, Cr 1.0. "
+        "CXR unchanged mild atelectasis. PT: CGA with RW 60 ft; plan BID. "
+        "Assessment: progressing appropriately; pain controlled; ileus resolving. "
+        "Plan: dc IVFs today, continue IS, PT BID, advance to regular diet, "
+        "remove JP when <30 mL/24h, anticipate discharge 1–2 days.",
+        ""
+    ),
+
+    "SINGLE NOTE: CHF clinic follow-up (complex)": (
+        "Clinic follow-up. HFrEF (EF 30%). Weight 88.2 kg (−2.7 kg from d/c). "
+        "Home meds: furosemide 40 mg BID, lisinopril 10 mg daily, metoprolol succinate 50 mg daily, "
+        "spironolactone 25 mg daily, dapagliflozin 10 mg daily. "
+        "Reports mild dizziness on standing; denies chest pain. 2+ ankle edema improved. "
+        "BP 102/66, HR 76, O2 RA 97%. Labs today: K 3.7, Cr 1.1, BNP 820 (down from 1400). "
+        "Plan: continue GDMT; reduce furosemide to 40 mg AM + 20 mg PM; "
+        "teach daily weights; call if >2 lb/day; cardiology f/u 2 weeks.",
+        ""
+    ),
 }
 
 # -------------------- Mode + Inputs --------------------
