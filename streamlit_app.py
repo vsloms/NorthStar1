@@ -119,7 +119,6 @@ SECTION_KEYS = {
     "cm": ["case management", "disposition", "discharge plan"],
     "brief": ["role brief", "nursing brief", "clinician brief", "summary brief"],
 }
-
 IGNORE_HEADINGS = {"note a", "note_b", "note b", "note_a", "note", "yesterday", "today"}
 
 def normalize_key(hdr: str) -> str:
@@ -134,20 +133,15 @@ def normalize_key(hdr: str) -> str:
 
 def split_sections(markdown_text: str):
     """Split LLM output by H2/H3 headings into our known buckets; ignore any Note A/B echoes."""
-    sections = {}
-    current_key = None
-    buf = []
-    lines = (markdown_text or "").splitlines()
-    for line in lines:
+    sections, current_key, buf = {}, None, []
+    for line in (markdown_text or "").splitlines():
         if line.startswith("#"):
             if current_key and current_key != "__ignore__":
                 sections[current_key] = (sections.get(current_key, "") + "\n" + "\n".join(buf)).strip() if buf else sections.get(current_key, "")
             buf = []
             m = re.match(r"^#{2,3}\s+(.*)$", line)
             if m:
-                hdr = m.group(1)
-                k = normalize_key(hdr)
-                current_key = k if k else "__ignore__"
+                current_key = normalize_key(m.group(1)) or "__ignore__"
             else:
                 current_key = "__ignore__"
         else:
@@ -251,47 +245,158 @@ def role_hint(r: str) -> str:
     if r == "Case Management": return "Emphasize disposition plan, services, insurance/authorization, DME."
     return "Emphasize assessment/plan differences, med changes, consults, diagnostic updates."
 
-# -------------------- LLM calls --------------------
+# -------------------- Strict prompts --------------------
 BASE_COMPARE_INSTR = (
-    "You are a clinical documentation assistant. Compare two clinical notes and report ONLY real differences. "
+    "You are a clinical documentation assistant. Compare two clinical notes and report ONLY real differences.\n"
     "STRICT FORMAT RULES:\n"
     "• OUTPUT ONLY these H2 headings, exactly as written, in this order:\n"
     "## Plan of Care Updates\n## Medications\n## Orders & Plan\n## PT/OT\n## Case Management / Disposition\n## Role Brief\n"
     "• DO NOT include any other headings.\n"
-    "• DO NOT repeat, quote, or echo the raw notes or any 'Note A/Note B' sections.\n"
+    "• DO NOT repeat, quote, or echo the raw notes outside of the required 'Source' line.\n"
     "• Use concise bullet points under each heading. Avoid boilerplate.\n"
     "• For 'Plan of Care Updates', produce a copy-paste-ready nurse handoff list (short imperative bullets for the next shift).\n"
+    "EVIDENCE TRACE (MANDATORY WHEN REQUESTED):\n"
+    "After each bullet, include the EXACT sentence or short phrase copied verbatim from the original note that supports it, "
+    "in parentheses prefixed with 'Source:' AND end that source with [A] or [B] to indicate which note it came from. "
+    "Examples:\n"
+    "- Foley removed this morning (Source: \"Foley REMOVED 09:00; voided 350 mL within 6h.\" [B])\n"
+    "- KCl ordered today (Source: \"Plan: KCl 40 mEq PO x1 then recheck;\" [B])\n"
+    "NEVER write just 'Note A' or 'Note B' as the source; you must quote the actual sentence/phrase.\n"
 )
+
 BASE_SINGLE_INSTR = (
-    "You are a clinical documentation assistant. Analyze ONE clinical note and extract actionable details. "
+    "You are a clinical documentation assistant. Analyze ONE clinical note and extract actionable details.\n"
     "STRICT FORMAT RULES:\n"
     "• OUTPUT ONLY these H2 headings, exactly as written, in this order:\n"
     "## Plan of Care Updates\n## Medications\n## Orders & Plan\n## PT/OT\n## Case Management / Disposition\n## Role Brief\n"
     "• DO NOT include any other headings.\n"
-    "• DO NOT repeat, quote, or echo the raw note.\n"
+    "• DO NOT repeat, quote, or echo the raw note outside of the required 'Source' line.\n"
     "• If a section is not mentioned, write 'No changes noted.'\n"
     "• For 'Plan of Care Updates', produce a copy-paste-ready nurse handoff list (short imperative bullets for the next shift).\n"
+    "EVIDENCE TRACE (MANDATORY WHEN REQUESTED):\n"
+    "After each bullet, include the EXACT sentence or short phrase copied verbatim from the original note that supports it, "
+    "in parentheses prefixed with 'Source:' and end that source with [NOTE] tag. Example:\n"
+    "- Increase basal insulin tonight (Source: \"increase glargine to 20 u;\" [NOTE])\n"
+    "NEVER write just 'Note' as the source; you must quote the actual sentence/phrase.\n"
 )
 
+# -------------------- LLM calls --------------------
 def compare_notes_structured(a: str, b: str, role: str, show_sources: bool) -> str:
-    sys = BASE_COMPARE_INSTR + ("• After each bullet, include a brief 'Source:' in parentheses.\n" if show_sources else "")
-    user = f"ROLE: {role}\nRole guidance: {role_hint(role)}\n\nNote_A (yesterday):\n{a}\n\nNote_B (today):\n{b}\n"
+    sys = BASE_COMPARE_INSTR
+    if not show_sources:
+        sys = sys.replace("EVIDENCE TRACE (MANDATORY WHEN REQUESTED):", "EVIDENCE TRACE (OFF):")
+        sys += "\nWhen evidence trace is off, do NOT include any 'Source:' text."
+    user = (
+        f"ROLE: {role}\nRole guidance: {role_hint(role)}\n"
+        "You will be evaluated automatically by string matching: any 'Source:' must be a verbatim substring of the note.\n"
+        "<NOTE_A>\n" + a + "\n</NOTE_A>\n\n"
+        "<NOTE_B>\n" + b + "\n</NOTE_B>\n"
+    )
     r = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "system", "content": sys}, {"role": "user", "content": user}],
-        temperature=0.2, max_tokens=900,
+        temperature=0.0,
+        max_tokens=1100,
     )
     return r.choices[0].message.content.strip()
 
 def analyze_single_note_structured(note: str, role: str, show_sources: bool) -> str:
-    sys = BASE_SINGLE_INSTR + ("• After each bullet, include a brief 'Source:' in parentheses.\n" if show_sources else "")
-    user = f"ROLE: {role}\nRole guidance: {role_hint(role)}\n\nNote:\n{note}\n"
+    sys = BASE_SINGLE_INSTR
+    if not show_sources:
+        sys = sys.replace("EVIDENCE TRACE (MANDATORY WHEN REQUESTED):", "EVIDENCE TRACE (OFF):")
+        sys += "\nWhen evidence trace is off, do NOT include any 'Source:' text."
+    user = (
+        f"ROLE: {role}\nRole guidance: {role_hint(role)}\n"
+        "You will be evaluated automatically by string matching: any 'Source:' must be a verbatim substring of the note.\n"
+        "<NOTE>\n" + note + "\n</NOTE>\n"
+    )
     r = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "system", "content": sys}, {"role": "user", "content": user}],
-        temperature=0.2, max_tokens=900,
+        temperature=0.0,
+        max_tokens=1100,
     )
     return r.choices[0].message.content.strip()
+
+# ---------- Evidence post-processor: replace bogus sources with real sentences ----------
+_SENT_SPLIT = re.compile(r'(?<=[\.\?\!])\s+|(?<=;)\s+')
+_STOP = set("""
+a an and the of to in for from with by on at as is are was were be been being
+this that these those it its their his her our your my we they he she you
+""".split())
+
+def _sentences(text: str):
+    if not text: return []
+    parts = _SENT_SPLIT.split(text.strip())
+    return [p.strip() for p in parts if p and len(p.strip()) > 3]
+
+def _score_overlap(bullet: str, sent: str) -> float:
+    bw = [w.lower() for w in re.findall(r"[A-Za-z0-9']+", bullet)]
+    sw = [w.lower() for w in re.findall(r"[A-Za-z0-9']+", sent)]
+    bw = [w for w in bw if w not in _STOP]
+    sw = [w for w in sw if w not in _STOP]
+    if not bw or not sw: return 0.0
+    bset, sset = set(bw), set(sw)
+    inter = len(bset & sset)
+    return inter / (len(bset) ** 0.5 * len(sset) ** 0.5)
+
+def _best_match_sentence(bullet: str, note: str):
+    best_s, best_sc = "", 0.0
+    for s in _sentences(note):
+        sc = _score_overlap(bullet, s)
+        if sc > best_sc:
+            best_s, best_sc = s, sc
+    return best_s, best_sc
+
+def enforce_sources_compare(markdown_text: str, note_a: str, note_b: str) -> str:
+    out_lines = []
+    for line in markdown_text.splitlines():
+        if "(Source:" in line:
+            bullet = line.split("(Source:")[0]
+            quoted = re.search(r'\(Source:\s*"(.*?)"\s*(\[.*?\])?\)', line)
+            bad = False
+            if quoted:
+                src_txt = quoted.group(1)
+                if len(src_txt) < 6 or src_txt.lower() in {"note a", "note b", "note"}:
+                    bad = True
+                else:
+                    if src_txt not in (note_a or "") and src_txt not in (note_b or ""):
+                        bad = True
+            else:
+                bad = True
+            if bad:
+                cand_a, sc_a = _best_match_sentence(bullet, note_a or "")
+                cand_b, sc_b = _best_match_sentence(bullet, note_b or "")
+                if sc_a == 0 and sc_b == 0:
+                    line = re.sub(r'\(Source:.*?\)', '(Source: not found)', line)
+                elif sc_b >= sc_a:
+                    line = re.sub(r'\(Source:.*?\)', f'(Source: "{cand_b}" [B])', line)
+                else:
+                    line = re.sub(r'\(Source:.*?\)', f'(Source: "{cand_a}" [A])', line)
+        out_lines.append(line)
+    return "\n".join(out_lines)
+
+def enforce_sources_single(markdown_text: str, note: str) -> str:
+    out_lines = []
+    for line in markdown_text.splitlines():
+        if "(Source:" in line:
+            bullet = line.split("(Source:")[0]
+            quoted = re.search(r'\(Source:\s*"(.*?)"\s*(\[.*?\])?\)', line)
+            bad = False
+            if quoted:
+                src_txt = quoted.group(1)
+                if len(src_txt) < 6 or "note" in src_txt.lower() or src_txt not in (note or ""):
+                    bad = True
+            else:
+                bad = True
+            if bad:
+                cand, sc = _best_match_sentence(bullet, note or "")
+                if sc == 0:
+                    line = re.sub(r'\(Source:.*?\)', '(Source: not found)', line)
+                else:
+                    line = re.sub(r'\(Source:.*?\)', f'(Source: "{cand}" [NOTE])', line)
+        out_lines.append(line)
+    return "\n".join(out_lines)
 
 # -------------------- PDF helper --------------------
 def brief_to_pdf_bytes(markdown_text: str, title: str = "Clinical Change Tracker"):
@@ -323,27 +428,28 @@ if st.button("Run", type="primary"):
             st.warning("Paste text into both boxes first."); st.stop()
         with st.spinner("Comparing..."):
             output_md = compare_notes_structured(note_a, note_b, role, show_sources=f_src)
+            if f_src:
+                output_md = enforce_sources_compare(output_md, note_a, note_b)
     else:
         if not note_b:
             st.warning("Paste a note first."); st.stop()
         with st.spinner("Analyzing..."):
             output_md = analyze_single_note_structured(note_b, role, show_sources=f_src)
+            if f_src:
+                output_md = enforce_sources_single(output_md, note_b)
 
     sections = split_sections(output_md)
-    # Assemble in the exact order we want, with Plan of Care Updates first
+    # Order with Plan of Care Updates first
     collected = []
-    if sections.get("pocu") and st.session_state.get("show_pocu", True) if True else True:
-        if st.session_state.get("show_pocu", True):
-            pass
-    if sections.get("pocu"): collected.append("## Plan of Care Updates\n" + sections["pocu"])
+    if sections.get("pocu") : collected.append("## Plan of Care Updates\n" + sections["pocu"])
     if sections.get("meds")  : collected.append("## Medications\n" + sections["meds"])
     if sections.get("orders"): collected.append("## Orders & Plan\n" + sections["orders"])
     if sections.get("ptot")  : collected.append("## PT/OT\n" + sections["ptot"])
     if sections.get("cm")    : collected.append("## Case Management / Disposition\n" + sections["cm"])
     if sections.get("brief") : collected.append("## Role Brief\n" + sections["brief"])
 
-    # Apply checkboxes (hide any section unchecked)
-    def keep(label, enabled):
+    # Apply checkboxes
+    def keep(label):
         return (label.startswith("## Plan of Care Updates") and f_pocu) or \
                (label.startswith("## Medications") and f_meds) or \
                (label.startswith("## Orders & Plan") and f_orders) or \
@@ -351,7 +457,7 @@ if st.button("Run", type="primary"):
                (label.startswith("## Case Management / Disposition") and f_cm) or \
                (label.startswith("## Role Brief") and f_brief)
 
-    final_text = "\n\n".join([sec for sec in collected if keep(sec, True)]).strip() or output_md
+    final_text = "\n\n".join([sec for sec in collected if keep(sec)]).strip() or output_md
 
     st.subheader("Summary")
     st.markdown(final_text)
